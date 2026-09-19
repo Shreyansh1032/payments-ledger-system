@@ -26,6 +26,8 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/paywave_test?sslmode=disable
     services:
       postgres:
         image: postgres:16-alpine
@@ -48,7 +50,7 @@ jobs:
       - name: Install migrate CLI
         run: go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
       - name: Run migrations
-        run: migrate -path migrations -database "postgres://postgres:postgres@localhost:5432/paywave_test?sslmode=disable" up
+        run: migrate -path migrations -database "$TEST_DATABASE_URL" up
       - name: Run tests
         run: go test ./... -v
 
