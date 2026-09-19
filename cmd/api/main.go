@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
+	"os"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 
 	"github.com/Shreyansh1032/payments-ledger-system/internal/config"
 	"github.com/Shreyansh1032/payments-ledger-system/internal/db"
@@ -17,12 +20,14 @@ import (
 )
 
 func main() {
+	log.Logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
+
 	cfg := config.Load()
 
 	ctx := context.Background()
 	pool, err := db.NewPool(ctx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("db connection failed: %v", err)
+		log.Fatal().Err(err).Msg("db connection failed")
 	}
 	defer pool.Close()
 
@@ -37,13 +42,17 @@ func main() {
 	transferHandler := handler.NewTransferHandler(transferService)
 
 	r := chi.NewRouter()
-	r.Use(chimiddleware.Logger)
+	r.Use(chimiddleware.RequestID)
+	r.Use(middleware.StructuredLogger)
+	r.Use(middleware.Metrics)
 	r.Use(chimiddleware.Recoverer)
 
 	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
+
+	r.Handle("/metrics", promhttp.Handler())
 
 	fileServer := http.FileServer(http.Dir("./docs"))
 	r.Handle("/docs/*", http.StripPrefix("/docs/", fileServer))
@@ -68,8 +77,8 @@ func main() {
 		r.Post("/", transferHandler.Transfer)
 	})
 
-	log.Printf("server listening on :%s", cfg.Port)
+	log.Info().Str("port", cfg.Port).Msg("server starting")
 	if err := http.ListenAndServe(":"+cfg.Port, r); err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("server failed")
 	}
 }

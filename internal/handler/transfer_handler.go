@@ -53,18 +53,25 @@ func (h *TransferHandler) Transfer(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrRecipientNotFound):
+			middleware.TransfersTotal.WithLabelValues("failed_recipient_not_found").Inc()
 			writeError(w, http.StatusNotFound, "recipient not found")
 		case errors.Is(err, service.ErrInsufficientBalance):
+			middleware.TransfersTotal.WithLabelValues("failed_insufficient_balance").Inc()
 			writeError(w, http.StatusBadRequest, "insufficient balance")
 		case errors.Is(err, service.ErrSelfTransfer):
+			middleware.TransfersTotal.WithLabelValues("failed_self_transfer").Inc()
 			writeError(w, http.StatusBadRequest, "cannot transfer to yourself")
 		case errors.Is(err, service.ErrInvalidAmount):
+			middleware.TransfersTotal.WithLabelValues("failed_invalid_amount").Inc()
 			writeError(w, http.StatusBadRequest, "amount must be positive")
 		default:
+			middleware.TransfersTotal.WithLabelValues("failed_internal").Inc()
 			writeError(w, http.StatusInternalServerError, "transfer failed")
 		}
 		return
 	}
+
+	middleware.TransfersTotal.WithLabelValues(result.Status).Inc()
 
 	writeJSON(w, http.StatusOK, map[string]string{
 		"transaction_id": result.TransactionID,
