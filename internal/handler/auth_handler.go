@@ -9,12 +9,13 @@ import (
 )
 
 type AuthHandler struct {
-	authService *service.AuthService
-	jwtSecret   string
+	authService         *service.AuthService
+	refreshTokenService *service.RefreshTokenService
+	jwtSecret           string
 }
 
-func NewAuthHandler(authService *service.AuthService, jwtSecret string) *AuthHandler {
-	return &AuthHandler{authService: authService, jwtSecret: jwtSecret}
+func NewAuthHandler(authService *service.AuthService, refreshTokenService *service.RefreshTokenService, jwtSecret string) *AuthHandler {
+	return &AuthHandler{authService: authService, refreshTokenService: refreshTokenService, jwtSecret: jwtSecret}
 }
 
 type signUpRequest struct {
@@ -29,8 +30,13 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
+type refreshRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
 type authResponse struct {
-	Token string `json:"token"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 func writeJSON(w http.ResponseWriter, status int, body interface{}) {
@@ -49,7 +55,6 @@ func (h *AuthHandler) SignUp(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-
 	if req.Username == "" || req.Password == "" || req.FirstName == "" || req.LastName == "" {
 		writeError(w, http.StatusBadRequest, "all fields are required")
 		return
@@ -69,13 +74,18 @@ func (h *AuthHandler) SignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := service.GenerateToken(h.jwtSecret, user.ID, user.Username)
+	accessToken, err := service.GenerateAccessToken(h.jwtSecret, user.ID, user.Username)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not generate token")
 		return
 	}
+	refreshToken, err := h.refreshTokenService.Issue(r.Context(), user.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not generate refresh token")
+		return
+	}
 
-	writeJSON(w, http.StatusCreated, authResponse{Token: token})
+	writeJSON(w, http.StatusCreated, authResponse{AccessToken: accessToken, RefreshToken: refreshToken})
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
@@ -91,11 +101,57 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := service.GenerateToken(h.jwtSecret, user.ID, user.Username)
+	accessToken, err := service.GenerateAccessToken(h.jwtSecret, user.ID, user.Username)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not generate token")
+		return
+	}
+	refreshToken, err := h.refreshTokenService.Issue(r.Context(), user.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not generate refresh token")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, authResponse{AccessToken: accessToken, RefreshToken: refreshToken})
+}
+
+func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	var req refreshRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.RefreshToken == "" {
+		writeError(w, http.StatusBadRequest, "refresh_token is required")
+		return
+	}
+
+	userID, username, newRefreshToken, err := h.refreshTokenService.Rotate(r.Context(), req.RefreshToken)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "invalid or expired refresh token")
+		return
+	}
+
+	accessToken, err := service.GenerateAccessToken(h.jwtSecret, userID, username)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not generate token")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, authResponse{Token: token})
+	writeJSON(w, http.StatusOK, authResponse{AccessToken: accessToken, RefreshToken: newRefreshToken})
+}
+
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	var req refreshRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if err := h.refreshTokenService.Revoke(r.Context(), req.RefreshToken); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not revoke token")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"msg": "logged out"})
 }

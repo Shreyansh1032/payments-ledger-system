@@ -27,7 +27,8 @@ func main() {
 	defer pool.Close()
 
 	authService := service.NewAuthService(pool)
-	authHandler := handler.NewAuthHandler(authService, cfg.JWTSecret)
+	refreshTokenService := service.NewRefreshTokenService(pool)
+	authHandler := handler.NewAuthHandler(authService, refreshTokenService, cfg.JWTSecret)
 
 	accountService := service.NewAccountService(pool)
 	accountHandler := handler.NewAccountHandler(accountService)
@@ -53,6 +54,8 @@ func main() {
 	r.Route("/api/v1/auth", func(r chi.Router) {
 		r.Post("/signup", authHandler.SignUp)
 		r.Post("/login", authHandler.Login)
+		r.Post("/refresh", authHandler.Refresh)
+		r.Post("/logout", authHandler.Logout)
 	})
 
 	r.Route("/api/v1/account", func(r chi.Router) {
