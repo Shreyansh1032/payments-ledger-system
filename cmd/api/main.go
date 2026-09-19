@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -41,11 +42,22 @@ func main() {
 	transferService := service.NewTransferService(pool)
 	transferHandler := handler.NewTransferHandler(transferService)
 
+	historyService := service.NewTransactionHistoryService(pool)
+	transactionHandler := handler.NewTransactionHandler(historyService)
+
 	r := chi.NewRouter()
 	r.Use(chimiddleware.RequestID)
 	r.Use(middleware.StructuredLogger)
 	r.Use(middleware.Metrics)
 	r.Use(chimiddleware.Recoverer)
+
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"http://localhost:5173"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Content-Type", "Authorization", "Idempotency-Key"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))
 
 	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -75,6 +87,11 @@ func main() {
 	r.Route("/api/v1/transfer", func(r chi.Router) {
 		r.Use(middleware.Auth(cfg.JWTSecret))
 		r.Post("/", transferHandler.Transfer)
+	})
+
+	r.Route("/api/v1/transactions", func(r chi.Router) {
+		r.Use(middleware.Auth(cfg.JWTSecret))
+		r.Get("/", transactionHandler.History)
 	})
 
 	log.Info().Str("port", cfg.Port).Msg("server starting")
