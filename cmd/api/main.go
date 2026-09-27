@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -12,6 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/time/rate"
 
 	"github.com/Shreyansh1032/payments-ledger-system/internal/config"
 	"github.com/Shreyansh1032/payments-ledger-system/internal/db"
@@ -46,6 +48,8 @@ func main() {
 	historyService := service.NewTransactionHistoryService(pool)
 	transactionHandler := handler.NewTransactionHandler(historyService)
 
+	authLimiter := middleware.NewRateLimiter(rate.Every(time.Minute/5), 5)
+
 	r := chi.NewRouter()
 	r.Use(chimiddleware.RequestID)
 	r.Use(middleware.StructuredLogger)
@@ -74,8 +78,8 @@ func main() {
 	})
 
 	r.Route("/api/v1/auth", func(r chi.Router) {
-		r.Post("/signup", authHandler.SignUp)
-		r.Post("/login", authHandler.Login)
+		r.With(authLimiter.Middleware).Post("/signup", authHandler.SignUp)
+		r.With(authLimiter.Middleware).Post("/login", authHandler.Login)
 		r.Post("/refresh", authHandler.Refresh)
 		r.Post("/logout", authHandler.Logout)
 	})

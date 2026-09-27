@@ -67,20 +67,27 @@ export function Dashboard() {
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
+          <Link
+            to="/deposit"
+            className="glass-panel rounded-xl p-4 text-center hover:bg-white/70 transition"
+          >
+            <div className="text-rose font-display text-lg mb-1">Add</div>
+            <div className="text-xs text-muted">Top up balance</div>
+          </Link>
           <Link
             to="/send"
             className="glass-panel rounded-xl p-4 text-center hover:bg-white/70 transition"
           >
             <div className="text-rose font-display text-lg mb-1">Send</div>
-            <div className="text-xs text-muted">Transfer to a username</div>
+            <div className="text-xs text-muted">To a username</div>
           </Link>
           <Link
             to="/transactions"
             className="glass-panel rounded-xl p-4 text-center hover:bg-white/70 transition"
           >
             <div className="text-rose font-display text-lg mb-1">Activity</div>
-            <div className="text-xs text-muted">Your transaction history</div>
+            <div className="text-xs text-muted">History</div>
           </Link>
         </div>
       </div>

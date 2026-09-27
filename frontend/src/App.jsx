@@ -4,6 +4,7 @@ import { Signup } from './pages/Signup';
 import { Dashboard } from './pages/Dashboard';
 import { SendMoney } from './pages/SendMoney';
 import { Transactions } from './pages/Transactions';
+import { Deposit } from './pages/Deposit';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
 function App() {
@@ -33,6 +34,14 @@ function App() {
         element={
           <ProtectedRoute>
             <Transactions />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/deposit"
+        element={
+          <ProtectedRoute>
+            <Deposit />
           </ProtectedRoute>
         }
       />
