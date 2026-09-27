@@ -2,14 +2,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Avatar } from '../components/Avatar';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { formatDate } from '../utils/date';
 import api from '../utils/api';
-
-function formatDate(iso) {
-  const d = new Date(iso);
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) +
-    ' · ' +
-    d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-}
 
 export function Transactions() {
   const [transactions, setTransactions] = useState([]);

@@ -22,6 +22,9 @@ import (
 	"github.com/Shreyansh1032/payments-ledger-system/internal/service"
 )
 
+// Version is set at build time via -ldflags "-X main.Version=v1.0.0"
+var Version = "dev"
+
 func main() {
 	log.Logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
 
@@ -39,7 +42,7 @@ func main() {
 	authHandler := handler.NewAuthHandler(authService, refreshTokenService, cfg.JWTSecret)
 
 	accountService := service.NewAccountService(pool)
-	accountHandler := handler.NewAccountHandler(accountService)
+	accountHandler := handler.NewAccountHandler(accountService, authService)
 
 	transferService := service.NewTransferService(pool)
 	transferHandler := handler.NewTransferHandler(transferService)
@@ -47,6 +50,18 @@ func main() {
 
 	historyService := service.NewTransactionHistoryService(pool)
 	transactionHandler := handler.NewTransactionHandler(historyService)
+
+	userSearchService := service.NewUserSearchService(pool)
+	userSearchHandler := handler.NewUserSearchHandler(userSearchService)
+
+	favoriteService := service.NewFavoriteService(pool)
+	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
+
+	paymentRequestService := service.NewPaymentRequestService(pool, transferService)
+	paymentRequestHandler := handler.NewPaymentRequestHandler(paymentRequestService)
+
+	insightsService := service.NewInsightsService(pool)
+	insightsHandler := handler.NewInsightsHandler(insightsService)
 
 	authLimiter := middleware.NewRateLimiter(rate.Every(time.Minute/5), 5)
 
@@ -57,7 +72,7 @@ func main() {
 	r.Use(chimiddleware.Recoverer)
 
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:5173"},
+		AllowedOrigins:   []string{cfg.CORSOrigin},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Content-Type", "Authorization", "Idempotency-Key"},
 		AllowCredentials: true,
@@ -67,6 +82,11 @@ func main() {
 	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	})
+
+	r.Get("/version", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"version": Version})
 	})
 
 	r.Handle("/metrics", promhttp.Handler())
@@ -87,6 +107,8 @@ func main() {
 	r.Route("/api/v1/account", func(r chi.Router) {
 		r.Use(middleware.Auth(cfg.JWTSecret))
 		r.Get("/balance", accountHandler.Balance)
+		r.Get("/profile", accountHandler.Profile)
+		r.Put("/password", accountHandler.ChangePassword)
 		r.Post("/deposit", depositHandler.Deposit)
 	})
 
@@ -100,7 +122,34 @@ func main() {
 		r.Get("/", transactionHandler.History)
 	})
 
-	log.Info().Str("port", cfg.Port).Msg("server starting")
+	r.Route("/api/v1/users", func(r chi.Router) {
+		r.Use(middleware.Auth(cfg.JWTSecret))
+		r.Get("/search", userSearchHandler.Search)
+	})
+
+	r.Route("/api/v1/favorites", func(r chi.Router) {
+		r.Use(middleware.Auth(cfg.JWTSecret))
+		r.Get("/", favoriteHandler.List)
+		r.Post("/", favoriteHandler.Add)
+		r.Delete("/{username}", favoriteHandler.Remove)
+	})
+
+	r.Route("/api/v1/requests", func(r chi.Router) {
+		r.Use(middleware.Auth(cfg.JWTSecret))
+		r.Post("/", paymentRequestHandler.Create)
+		r.Post("/split", paymentRequestHandler.CreateSplit)
+		r.Get("/incoming", paymentRequestHandler.ListIncoming)
+		r.Get("/outgoing", paymentRequestHandler.ListOutgoing)
+		r.Post("/{id}/approve", paymentRequestHandler.Approve)
+		r.Post("/{id}/decline", paymentRequestHandler.Decline)
+	})
+
+	r.Route("/api/v1/insights", func(r chi.Router) {
+		r.Use(middleware.Auth(cfg.JWTSecret))
+		r.Get("/monthly", insightsHandler.Monthly)
+	})
+
+	log.Info().Str("port", cfg.Port).Str("version", Version).Msg("server starting")
 	if err := http.ListenAndServe(":"+cfg.Port, r); err != nil {
 		log.Fatal().Err(err).Msg("server failed")
 	}

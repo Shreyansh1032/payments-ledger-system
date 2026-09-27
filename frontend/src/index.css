@@ -13,8 +13,22 @@
   --font-sans: 'Manrope', sans-serif;
 }
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+.dark {
+  --color-ink: #F7F1F4;
+  --color-mist: #17101a;
+  --color-blush: #2b1622;
+  --color-muted: #b09aab;
+}
+
+html, body, #root {
+  @apply overflow-x-hidden;
+  max-width: 100vw;
+}
+
 body {
-  @apply bg-mist text-ink font-sans;
+  @apply bg-mist text-ink font-sans transition-colors duration-300;
 }
 
 .glass-panel {
@@ -25,12 +39,26 @@ body {
   box-shadow: 0 8px 32px rgba(179, 36, 92, 0.08);
 }
 
+.dark .glass-panel {
+  background: rgba(30, 18, 26, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
 .aura-backdrop {
   background:
     radial-gradient(circle at 20% 20%, rgba(179, 36, 92, 0.18), transparent 45%),
     radial-gradient(circle at 80% 30%, rgba(251, 233, 239, 0.9), transparent 50%),
     radial-gradient(circle at 50% 90%, rgba(179, 36, 92, 0.10), transparent 45%),
     #F7F5F6;
+}
+
+.dark .aura-backdrop {
+  background:
+    radial-gradient(circle at 20% 20%, rgba(179, 36, 92, 0.25), transparent 45%),
+    radial-gradient(circle at 80% 30%, rgba(43, 22, 34, 0.9), transparent 50%),
+    radial-gradient(circle at 50% 90%, rgba(179, 36, 92, 0.15), transparent 45%),
+    #17101a;
 }
 
 .tabular-nums {

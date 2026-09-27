@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { InputBox } from '../components/InputBox';
@@ -15,6 +15,20 @@ export function Signin() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const existingToken = localStorage.getItem('access_token');
+    if (existingToken) {
+      const refreshToken = localStorage.getItem('refresh_token');
+      if (refreshToken) {
+        api.post('/auth/logout', { refresh_token: refreshToken }).catch(() => {});
+      }
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('username');
+      localStorage.removeItem('first_name');
+    }
+  }, []);
 
   async function handleSignin() {
     setError('');

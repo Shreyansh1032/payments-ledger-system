@@ -10,6 +10,7 @@ type Config struct {
 	Port        string
 	DatabaseURL string
 	JWTSecret   string
+	CORSOrigin  string
 }
 
 func Load() *Config {
@@ -19,6 +20,7 @@ func Load() *Config {
 		Port:        getEnv("PORT", "8080"),
 		DatabaseURL: getEnv("DATABASE_URL", ""),
 		JWTSecret:   getEnv("JWT_SECRET", ""),
+		CORSOrigin:  getEnv("CORS_ORIGIN", "http://localhost:5173"),
 	}
 }
 

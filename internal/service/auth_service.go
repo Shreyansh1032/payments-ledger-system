@@ -85,3 +85,21 @@ func (s *AuthService) Login(ctx context.Context, username, password string) (*mo
 
 	return &user, nil
 }
+
+func (s *AuthService) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error {
+	var hash string
+	if err := s.pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1`, userID).Scan(&hash); err != nil {
+		return err
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(currentPassword)); err != nil {
+		return ErrInvalidCredentials
+	}
+
+	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.pool.Exec(ctx, `UPDATE users SET password_hash=$1 WHERE id=$2`, string(newHash), userID)
+	return err
+}

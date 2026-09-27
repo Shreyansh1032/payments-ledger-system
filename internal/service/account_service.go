@@ -5,6 +5,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shopspring/decimal"
+
+	"github.com/Shreyansh1032/payments-ledger-system/internal/model"
 )
 
 type AccountService struct {
@@ -25,4 +27,16 @@ func (s *AccountService) GetBalance(ctx context.Context, userID string) (decimal
 		return decimal.Decimal{}, err
 	}
 	return balance, nil
+}
+
+func (s *AccountService) GetProfile(ctx context.Context, userID string) (*model.User, error) {
+	var u model.User
+	err := s.pool.QueryRow(ctx,
+		`SELECT id, username, first_name, last_name, created_at FROM users WHERE id=$1`,
+		userID,
+	).Scan(&u.ID, &u.Username, &u.FirstName, &u.LastName, &u.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
 }

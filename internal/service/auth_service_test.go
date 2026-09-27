@@ -86,3 +86,42 @@ func TestAuthService_Login_WrongPassword(t *testing.T) {
 		t.Errorf("expected ErrInvalidCredentials, got %v", err)
 	}
 }
+
+func TestAuthService_ChangePassword_Success(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	testutil.Truncate(t, pool)
+	ctx := context.Background()
+
+	authService := service.NewAuthService(pool)
+
+	user, _ := authService.SignUp(ctx, "pwchange", "P", "C", "oldpassword")
+
+	if err := authService.ChangePassword(ctx, user.ID, "oldpassword", "newpassword123"); err != nil {
+		t.Fatalf("change password failed: %v", err)
+	}
+
+	if _, err := authService.Login(ctx, "pwchange", "oldpassword"); err != service.ErrInvalidCredentials {
+		t.Errorf("expected old password to be rejected, got %v", err)
+	}
+	if _, err := authService.Login(ctx, "pwchange", "newpassword123"); err != nil {
+		t.Errorf("expected new password to work, got %v", err)
+	}
+}
+
+func TestAuthService_ChangePassword_WrongCurrentPassword(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	testutil.Truncate(t, pool)
+	ctx := context.Background()
+
+	authService := service.NewAuthService(pool)
+
+	if _, err := authService.SignUp(ctx, "pwwrong", "P", "W", "correctpassword"); err != nil {
+		t.Fatalf("signup failed: %v", err)
+	}
+
+	user, _ := authService.Login(ctx, "pwwrong", "correctpassword")
+	err := authService.ChangePassword(ctx, user.ID, "wrongpassword", "newpassword123")
+	if err != service.ErrInvalidCredentials {
+		t.Errorf("expected ErrInvalidCredentials, got %v", err)
+	}
+}
