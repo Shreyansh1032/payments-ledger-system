@@ -41,6 +41,7 @@ func main() {
 
 	transferService := service.NewTransferService(pool)
 	transferHandler := handler.NewTransferHandler(transferService)
+	depositHandler := handler.NewDepositHandler(transferService)
 
 	historyService := service.NewTransactionHistoryService(pool)
 	transactionHandler := handler.NewTransactionHandler(historyService)
@@ -82,6 +83,7 @@ func main() {
 	r.Route("/api/v1/account", func(r chi.Router) {
 		r.Use(middleware.Auth(cfg.JWTSecret))
 		r.Get("/balance", accountHandler.Balance)
+		r.Post("/deposit", depositHandler.Deposit)
 	})
 
 	r.Route("/api/v1/transfer", func(r chi.Router) {

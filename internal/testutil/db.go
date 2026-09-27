@@ -41,9 +41,27 @@ func NewTestPool(t *testing.T) *pgxpool.Pool {
 
 func Truncate(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	_, err := pool.Exec(context.Background(),
+	ctx := context.Background()
+
+	_, err := pool.Exec(ctx,
 		`TRUNCATE TABLE ledger_entries, transactions, accounts, users RESTART IDENTITY CASCADE`)
 	if err != nil {
 		t.Fatalf("truncate: %v", err)
+	}
+
+	// Truncation wipes the system treasury account seeded by migration
+	// 000005 along with everything else -- reseed it so Deposit tests
+	// (and anything else that assumes it exists) keep working.
+	_, err = pool.Exec(ctx,
+		`INSERT INTO users (username, first_name, last_name, password_hash)
+		 VALUES ('system_treasury', 'System', 'Treasury', 'no-login-system-account')`)
+	if err != nil {
+		t.Fatalf("reseed system user: %v", err)
+	}
+	_, err = pool.Exec(ctx,
+		`INSERT INTO accounts (user_id, balance, is_system)
+		 SELECT id, 0, true FROM users WHERE username = 'system_treasury'`)
+	if err != nil {
+		t.Fatalf("reseed system account: %v", err)
 	}
 }
