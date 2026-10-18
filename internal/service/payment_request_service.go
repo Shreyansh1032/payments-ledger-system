@@ -55,12 +55,18 @@ func (s *PaymentRequestService) Create(ctx context.Context, requesterID, payerUs
 	if err != nil {
 		return nil, err
 	}
+
+	var requesterUsername string
+	if err := s.pool.QueryRow(ctx, `SELECT username FROM users WHERE id=$1`, requesterID).Scan(&requesterUsername); err == nil {
+		_, _ = s.pool.Exec(ctx,
+			`INSERT INTO notifications (user_id, type, message) VALUES ($1, 'request_received', $2)`,
+			payerID, fmt.Sprintf("%s requested \u20b9%s from you", requesterUsername, amount.StringFixed(2)),
+		)
+	}
+
 	return req, nil
 }
 
-// CreateSplit divides total evenly and requests each participant's share.
-// Not wrapped in a single DB transaction: if a later participant is
-// invalid, earlier requests in the same split will already exist.
 func (s *PaymentRequestService) CreateSplit(ctx context.Context, creatorID string, participantUsernames []string, total decimal.Decimal, note string) ([]model.PaymentRequest, error) {
 	if len(participantUsernames) == 0 {
 		return nil, ErrNoParticipants
@@ -185,5 +191,17 @@ func (s *PaymentRequestService) Decline(ctx context.Context, requestID, payerID 
 	if tag.RowsAffected() == 0 {
 		return ErrPaymentRequestNotFound
 	}
+
+	var requesterID, payerUsername string
+	if err := s.pool.QueryRow(ctx, `
+		SELECT pr.requester_id, u.username FROM payment_requests pr
+		JOIN users u ON u.id = pr.payer_id WHERE pr.id = $1
+	`, requestID).Scan(&requesterID, &payerUsername); err == nil {
+		_, _ = s.pool.Exec(ctx,
+			`INSERT INTO notifications (user_id, type, message) VALUES ($1, 'request_declined', $2)`,
+			requesterID, fmt.Sprintf("%s declined your request", payerUsername),
+		)
+	}
+
 	return nil
 }

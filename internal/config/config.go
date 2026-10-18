@@ -11,6 +11,7 @@ type Config struct {
 	DatabaseURL string
 	JWTSecret   string
 	CORSOrigin  string
+	AppBaseURL  string
 }
 
 func Load() *Config {
@@ -21,6 +22,7 @@ func Load() *Config {
 		DatabaseURL: getEnv("DATABASE_URL", ""),
 		JWTSecret:   getEnv("JWT_SECRET", ""),
 		CORSOrigin:  getEnv("CORS_ORIGIN", "http://localhost:5173"),
+		AppBaseURL:  getEnv("APP_BASE_URL", "http://localhost:8080"),
 	}
 }
 

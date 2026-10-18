@@ -22,8 +22,22 @@ import (
 	"github.com/Shreyansh1032/payments-ledger-system/internal/service"
 )
 
-// Version is set at build time via -ldflags "-X main.Version=v1.0.0"
 var Version = "dev"
+
+func runScheduledTransfers(ctx context.Context, s *service.ScheduledTransferService) {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := s.RunDue(ctx); err != nil {
+				log.Error().Err(err).Msg("scheduled transfer run failed")
+			}
+		}
+	}
+}
 
 func main() {
 	log.Logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
@@ -39,10 +53,15 @@ func main() {
 
 	authService := service.NewAuthService(pool)
 	refreshTokenService := service.NewRefreshTokenService(pool)
-	authHandler := handler.NewAuthHandler(authService, refreshTokenService, cfg.JWTSecret)
+	totpService := service.NewTOTPService(pool)
+	authHandler := handler.NewAuthHandler(authService, refreshTokenService, totpService, cfg.JWTSecret)
+	totpHandler := handler.NewTOTPHandler(totpService)
 
 	accountService := service.NewAccountService(pool)
 	accountHandler := handler.NewAccountHandler(accountService, authService)
+
+	emailVerificationService := service.NewEmailVerificationService(pool, service.LogEmailSender{})
+	emailHandler := handler.NewEmailVerificationHandler(emailVerificationService, cfg.AppBaseURL)
 
 	transferService := service.NewTransferService(pool)
 	transferHandler := handler.NewTransferHandler(transferService)
@@ -50,6 +69,8 @@ func main() {
 
 	historyService := service.NewTransactionHistoryService(pool)
 	transactionHandler := handler.NewTransactionHandler(historyService)
+	categoryService := service.NewTransactionCategoryService(pool)
+	exportHandler := handler.NewTransactionExportHandler(historyService, categoryService)
 
 	userSearchService := service.NewUserSearchService(pool)
 	userSearchHandler := handler.NewUserSearchHandler(userSearchService)
@@ -62,6 +83,20 @@ func main() {
 
 	insightsService := service.NewInsightsService(pool)
 	insightsHandler := handler.NewInsightsHandler(insightsService)
+
+	scheduledTransferService := service.NewScheduledTransferService(pool, transferService)
+	scheduledTransferHandler := handler.NewScheduledTransferHandler(scheduledTransferService)
+
+	savingsGoalService := service.NewSavingsGoalService(pool)
+	savingsGoalHandler := handler.NewSavingsGoalHandler(savingsGoalService)
+
+	budgetService := service.NewBudgetService(pool)
+	budgetHandler := handler.NewBudgetHandler(budgetService)
+
+	notificationService := service.NewNotificationService(pool)
+	notificationHandler := handler.NewNotificationHandler(notificationService)
+
+	go runScheduledTransfers(ctx, scheduledTransferService)
 
 	authLimiter := middleware.NewRateLimiter(rate.Every(time.Minute/5), 5)
 
@@ -102,6 +137,7 @@ func main() {
 		r.With(authLimiter.Middleware).Post("/login", authHandler.Login)
 		r.Post("/refresh", authHandler.Refresh)
 		r.Post("/logout", authHandler.Logout)
+		r.Post("/verify-email", emailHandler.Verify)
 	})
 
 	r.Route("/api/v1/account", func(r chi.Router) {
@@ -109,7 +145,11 @@ func main() {
 		r.Get("/balance", accountHandler.Balance)
 		r.Get("/profile", accountHandler.Profile)
 		r.Put("/password", accountHandler.ChangePassword)
+		r.Put("/email", emailHandler.SetEmail)
 		r.Post("/deposit", depositHandler.Deposit)
+		r.Post("/2fa/setup", totpHandler.BeginSetup)
+		r.Post("/2fa/confirm", totpHandler.Confirm)
+		r.Post("/2fa/disable", totpHandler.Disable)
 	})
 
 	r.Route("/api/v1/transfer", func(r chi.Router) {
@@ -120,6 +160,8 @@ func main() {
 	r.Route("/api/v1/transactions", func(r chi.Router) {
 		r.Use(middleware.Auth(cfg.JWTSecret))
 		r.Get("/", transactionHandler.History)
+		r.Get("/export", exportHandler.Export)
+		r.Patch("/{id}/category", exportHandler.SetCategory)
 	})
 
 	r.Route("/api/v1/users", func(r chi.Router) {
@@ -147,6 +189,34 @@ func main() {
 	r.Route("/api/v1/insights", func(r chi.Router) {
 		r.Use(middleware.Auth(cfg.JWTSecret))
 		r.Get("/monthly", insightsHandler.Monthly)
+	})
+
+	r.Route("/api/v1/scheduled-transfers", func(r chi.Router) {
+		r.Use(middleware.Auth(cfg.JWTSecret))
+		r.Post("/", scheduledTransferHandler.Create)
+		r.Get("/", scheduledTransferHandler.List)
+		r.Delete("/{id}", scheduledTransferHandler.Cancel)
+	})
+
+	r.Route("/api/v1/goals", func(r chi.Router) {
+		r.Use(middleware.Auth(cfg.JWTSecret))
+		r.Post("/", savingsGoalHandler.Create)
+		r.Get("/", savingsGoalHandler.List)
+		r.Post("/{id}/contribute", savingsGoalHandler.Contribute)
+		r.Delete("/{id}", savingsGoalHandler.Delete)
+	})
+
+	r.Route("/api/v1/budgets", func(r chi.Router) {
+		r.Use(middleware.Auth(cfg.JWTSecret))
+		r.Post("/", budgetHandler.SetLimit)
+		r.Get("/", budgetHandler.List)
+		r.Delete("/{id}", budgetHandler.Delete)
+	})
+
+	r.Route("/api/v1/notifications", func(r chi.Router) {
+		r.Use(middleware.Auth(cfg.JWTSecret))
+		r.Get("/", notificationHandler.List)
+		r.Post("/read-all", notificationHandler.MarkAllRead)
 	})
 
 	log.Info().Str("port", cfg.Port).Str("version", Version).Msg("server starting")

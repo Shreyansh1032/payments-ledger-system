@@ -10,10 +10,6 @@ import (
 
 const SystemTreasuryUsername = "system_treasury"
 
-// Deposit adds funds to a user's own account, sourced from the system
-// treasury account. It reuses the same locked, idempotent, double-entry
-// pattern as Transfer -- the only difference is the sender is the system
-// account, so the balance check on the sender is skipped.
 func (s *TransferService) Deposit(ctx context.Context, idempotencyKey, userID string, amount decimal.Decimal) (*TransferResult, error) {
 	if amount.LessThanOrEqual(decimal.Zero) {
 		return nil, ErrInvalidAmount
@@ -101,6 +97,13 @@ func (s *TransferService) Deposit(ctx context.Context, idempotencyKey, userID st
 	}
 
 	if _, err := tx.Exec(ctx, `UPDATE transactions SET completed_at = now() WHERE id=$1`, txnID); err != nil {
+		return nil, err
+	}
+
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO notifications (user_id, type, message) VALUES ($1, 'deposit_completed', $2)`,
+		userID, "You added \u20b9"+amount.StringFixed(2)+" to your wallet",
+	); err != nil {
 		return nil, err
 	}
 

@@ -1,6 +1,5 @@
 .git
 .env
 *.md
-migrations
 docs
 tmp

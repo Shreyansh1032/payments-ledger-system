@@ -11,6 +11,7 @@ import (
 type contextKey string
 
 const UserIDKey contextKey = "userID"
+const UsernameKey contextKey = "username"
 
 func Auth(jwtSecret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -29,6 +30,7 @@ func Auth(jwtSecret string) func(http.Handler) http.Handler {
 			}
 
 			ctx := context.WithValue(r.Context(), UserIDKey, claims.UserID)
+			ctx = context.WithValue(ctx, UsernameKey, claims.Username)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

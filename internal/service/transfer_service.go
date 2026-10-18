@@ -34,7 +34,6 @@ func (s *TransferService) Transfer(ctx context.Context, idempotencyKey, fromUser
 		return nil, ErrInvalidAmount
 	}
 
-	// idempotent replay: same key -> return the original result, don't re-process
 	var existingID, existingStatus string
 	err := s.pool.QueryRow(ctx,
 		`SELECT id, status FROM transactions WHERE idempotency_key=$1`,
@@ -53,8 +52,11 @@ func (s *TransferService) Transfer(ctx context.Context, idempotencyKey, fromUser
 	}
 	defer tx.Rollback(ctx)
 
-	var fromAccountID string
-	if err := tx.QueryRow(ctx, `SELECT id FROM accounts WHERE user_id=$1`, fromUserID).Scan(&fromAccountID); err != nil {
+	var fromAccountID, fromUsername string
+	if err := tx.QueryRow(ctx,
+		`SELECT accounts.id, users.username FROM accounts JOIN users ON users.id = accounts.user_id WHERE accounts.user_id=$1`,
+		fromUserID,
+	).Scan(&fromAccountID, &fromUsername); err != nil {
 		return nil, err
 	}
 
@@ -74,9 +76,6 @@ func (s *TransferService) Transfer(ctx context.Context, idempotencyKey, fromUser
 		return nil, ErrSelfTransfer
 	}
 
-	// lock both accounts in a consistent order (sorted by id), regardless of
-	// who's sending and who's receiving -- this is what prevents deadlocks
-	// when two transfers happen concurrently in opposite directions
 	firstID, secondID := fromAccountID, toAccountID
 	if secondID < firstID {
 		firstID, secondID = secondID, firstID
@@ -150,6 +149,13 @@ func (s *TransferService) Transfer(ctx context.Context, idempotencyKey, fromUser
 	}
 
 	if _, err := tx.Exec(ctx, `UPDATE transactions SET completed_at = now() WHERE id=$1`, txnID); err != nil {
+		return nil, err
+	}
+
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO notifications (user_id, type, message) VALUES ($1, 'transfer_received', $2)`,
+		toUserID, "You received \u20b9"+amount.StringFixed(2)+" from "+fromUsername,
+	); err != nil {
 		return nil, err
 	}
 

@@ -11,11 +11,12 @@ import (
 type AuthHandler struct {
 	authService         *service.AuthService
 	refreshTokenService *service.RefreshTokenService
+	totpService         *service.TOTPService
 	jwtSecret           string
 }
 
-func NewAuthHandler(authService *service.AuthService, refreshTokenService *service.RefreshTokenService, jwtSecret string) *AuthHandler {
-	return &AuthHandler{authService: authService, refreshTokenService: refreshTokenService, jwtSecret: jwtSecret}
+func NewAuthHandler(authService *service.AuthService, refreshTokenService *service.RefreshTokenService, totpService *service.TOTPService, jwtSecret string) *AuthHandler {
+	return &AuthHandler{authService: authService, refreshTokenService: refreshTokenService, totpService: totpService, jwtSecret: jwtSecret}
 }
 
 type signUpRequest struct {
@@ -28,6 +29,7 @@ type signUpRequest struct {
 type loginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	TOTPCode string `json:"totp_code,omitempty"`
 }
 
 type refreshRequest struct {
@@ -99,6 +101,29 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "invalid credentials")
 		return
+	}
+
+	if h.totpService != nil {
+		enabled, err := h.totpService.IsEnabled(r.Context(), user.ID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "could not verify login")
+			return
+		}
+		if enabled {
+			if req.TOTPCode == "" {
+				writeJSON(w, http.StatusOK, map[string]interface{}{"totp_required": true})
+				return
+			}
+			valid, err := h.totpService.ValidateLogin(r.Context(), user.ID, req.TOTPCode)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "could not verify login")
+				return
+			}
+			if !valid {
+				writeError(w, http.StatusUnauthorized, "invalid two-factor code")
+				return
+			}
+		}
 	}
 
 	accessToken, err := service.GenerateAccessToken(h.jwtSecret, user.ID, user.Username)
