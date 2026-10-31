@@ -7,6 +7,7 @@ import { SubHeading } from '../components/SubHeading';
 import { BottomWarning } from '../components/BottomWarning';
 import { GlassCard } from '../components/GlassCard';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { GoogleSignInButton } from '../components/GoogleSignInButton';
 import api from '../utils/api';
 
 export function Signup() {
@@ -83,6 +84,14 @@ export function Signup() {
           <div className="pt-4">
             <Button label={loading ? 'Creating account…' : 'Sign up'} onClick={handleSignup} disabled={loading} />
           </div>
+
+          <div className="flex items-center gap-3 my-4">
+            <div className="h-px bg-ink/10 flex-1" />
+            <div className="text-xs text-muted">or</div>
+            <div className="h-px bg-ink/10 flex-1" />
+          </div>
+
+          <GoogleSignInButton onError={setError} />
 
           <BottomWarning label="Already have an account?" buttonText="Sign in" to="/signin" />
         </GlassCard>
