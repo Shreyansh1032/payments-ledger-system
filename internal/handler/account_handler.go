@@ -12,10 +12,11 @@ import (
 type AccountHandler struct {
 	accountService *service.AccountService
 	authService    *service.AuthService
+	totpService    *service.TOTPService
 }
 
-func NewAccountHandler(accountService *service.AccountService, authService *service.AuthService) *AccountHandler {
-	return &AccountHandler{accountService: accountService, authService: authService}
+func NewAccountHandler(accountService *service.AccountService, authService *service.AuthService, totpService *service.TOTPService) *AccountHandler {
+	return &AccountHandler{accountService: accountService, authService: authService, totpService: totpService}
 }
 
 func (h *AccountHandler) Balance(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +48,20 @@ func (h *AccountHandler) Profile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, profile)
+	totpEnabled, err := h.totpService.IsEnabled(r.Context(), userID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not fetch profile")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"id":           profile.ID,
+		"username":     profile.Username,
+		"first_name":   profile.FirstName,
+		"last_name":    profile.LastName,
+		"created_at":   profile.CreatedAt,
+		"totp_enabled": totpEnabled,
+	})
 }
 
 type changePasswordRequest struct {

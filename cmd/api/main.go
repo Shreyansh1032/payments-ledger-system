@@ -59,10 +59,10 @@ func main() {
 
 	googleVerifier := service.NewGoogleIDTokenVerifier(cfg.GoogleClientID)
 	googleAuthService := service.NewGoogleAuthService(pool, googleVerifier)
-	googleAuthHandler := handler.NewGoogleAuthHandler(googleAuthService, refreshTokenService, cfg.JWTSecret)
+	googleAuthHandler := handler.NewGoogleAuthHandler(googleAuthService, refreshTokenService, cfg.JWTSecret, totpService)
 
 	accountService := service.NewAccountService(pool)
-	accountHandler := handler.NewAccountHandler(accountService, authService)
+	accountHandler := handler.NewAccountHandler(accountService, authService, totpService)
 
 	emailVerificationService := service.NewEmailVerificationService(pool, service.LogEmailSender{})
 	emailHandler := handler.NewEmailVerificationHandler(emailVerificationService, cfg.AppBaseURL)

@@ -12,14 +12,16 @@ type GoogleAuthHandler struct {
 	googleAuthService   *service.GoogleAuthService
 	refreshTokenService *service.RefreshTokenService
 	jwtSecret           string
+	totpService         *service.TOTPService
 }
 
-func NewGoogleAuthHandler(g *service.GoogleAuthService, r *service.RefreshTokenService, jwtSecret string) *GoogleAuthHandler {
-	return &GoogleAuthHandler{googleAuthService: g, refreshTokenService: r, jwtSecret: jwtSecret}
+func NewGoogleAuthHandler(g *service.GoogleAuthService, r *service.RefreshTokenService, jwtSecret string, t *service.TOTPService) *GoogleAuthHandler {
+	return &GoogleAuthHandler{googleAuthService: g, refreshTokenService: r, jwtSecret: jwtSecret, totpService: t}
 }
 
 type googleSignInRequest struct {
-	IDToken string `json:"id_token"`
+	IDToken  string `json:"id_token"`
+	TOTPCode string `json:"totp_code"`
 }
 
 func (h *GoogleAuthHandler) SignIn(w http.ResponseWriter, r *http.Request) {
@@ -40,6 +42,27 @@ func (h *GoogleAuthHandler) SignIn(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "could not sign in with google")
 		}
 		return
+	}
+
+	totpEnabled, err := h.totpService.IsEnabled(r.Context(), user.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not verify login")
+		return
+	}
+	if totpEnabled {
+		if req.TOTPCode == "" {
+			writeJSON(w, http.StatusOK, map[string]interface{}{"totp_required": true})
+			return
+		}
+		valid, err := h.totpService.ValidateLogin(r.Context(), user.ID, req.TOTPCode)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "could not verify login")
+			return
+		}
+		if !valid {
+			writeError(w, http.StatusUnauthorized, "invalid two-factor code")
+			return
+		}
 	}
 
 	accessToken, err := service.GenerateAccessToken(h.jwtSecret, user.ID, user.Username)
