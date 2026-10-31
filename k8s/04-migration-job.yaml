@@ -10,7 +10,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: migrate
-          image: shreyanshsinha/payments-ledger-migrator:v1.0.0
+          image: shreyanshsinha/payments-ledger-migrator:v2.0.0
           args: ["-path=/migrations", "-database=$(DATABASE_URL)", "up"]
           envFrom:
             - secretRef:

@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: shreyanshsinha/payments-ledger-frontend:v1.0.0
+          image: shreyanshsinha/payments-ledger-frontend:v2.0.0
           imagePullPolicy: Always
           ports:
             - containerPort: 80

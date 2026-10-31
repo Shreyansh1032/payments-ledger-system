@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: shreyanshsinha/payments-ledger-system:v1.0.0
+          image: shreyanshsinha/payments-ledger-system:v2.0.0
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
