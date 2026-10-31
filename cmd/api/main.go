@@ -57,6 +57,10 @@ func main() {
 	authHandler := handler.NewAuthHandler(authService, refreshTokenService, totpService, cfg.JWTSecret)
 	totpHandler := handler.NewTOTPHandler(totpService)
 
+	googleVerifier := service.NewGoogleIDTokenVerifier(cfg.GoogleClientID)
+	googleAuthService := service.NewGoogleAuthService(pool, googleVerifier)
+	googleAuthHandler := handler.NewGoogleAuthHandler(googleAuthService, refreshTokenService, cfg.JWTSecret)
+
 	accountService := service.NewAccountService(pool)
 	accountHandler := handler.NewAccountHandler(accountService, authService)
 
@@ -138,6 +142,7 @@ func main() {
 		r.Post("/refresh", authHandler.Refresh)
 		r.Post("/logout", authHandler.Logout)
 		r.Post("/verify-email", emailHandler.Verify)
+		r.Post("/google", googleAuthHandler.SignIn)
 	})
 
 	r.Route("/api/v1/account", func(r chi.Router) {
